@@ -1,0 +1,130 @@
+POWER BI DAX MEASURES AND DASHBOARD BUILD INSTRUCTIONS
+
+1. Import financial_complaints_cleaned.csv using Get Data > Text/CSV.
+2. Name the imported table financial_complaints_cleaned (or update the table
+   name in the measures below). Set date fields to Date, days fields to Whole
+   Number, and all categories/IDs to Text. Do not replace blank dates with
+   default dates.
+3. Create each measure from Modeling > New measure.
+
+Total Complaints =
+DISTINCTCOUNT(financial_complaints_cleaned[complaint_id])
+
+Open Complaints =
+CALCULATE(
+    [Total Complaints],
+    financial_complaints_cleaned[response_status] = "Open"
+)
+
+Closed Complaints =
+CALCULATE(
+    [Total Complaints],
+    financial_complaints_cleaned[response_status] = "Closed"
+)
+
+Responded Complaints =
+CALCULATE(
+    [Total Complaints],
+    FILTER(
+        financial_complaints_cleaned,
+        NOT ISBLANK(financial_complaints_cleaned[date_company_responded])
+    )
+)
+
+Average Response Days =
+AVERAGE(financial_complaints_cleaned[days_to_response])
+
+Median Response Days =
+MEDIANX(
+    FILTER(
+        financial_complaints_cleaned,
+        NOT ISBLANK(financial_complaints_cleaned[days_to_response])
+    ),
+    financial_complaints_cleaned[days_to_response]
+)
+
+Timely Responses =
+CALCULATE(
+    [Total Complaints],
+    financial_complaints_cleaned[response_status] = "Closed",
+    financial_complaints_cleaned[timely_response] = "Yes"
+)
+
+Timely Response Rate =
+DIVIDE([Timely Responses], [Closed Complaints])
+
+Late Closed Responses =
+CALCULATE(
+    [Total Complaints],
+    financial_complaints_cleaned[response_status] = "Closed",
+    financial_complaints_cleaned[days_late] > 0
+)
+
+Late Response Rate =
+DIVIDE([Late Closed Responses], [Closed Complaints])
+
+Missing State Complaints =
+CALCULATE(
+    [Total Complaints],
+    FILTER(
+        financial_complaints_cleaned,
+        ISBLANK(financial_complaints_cleaned[state])
+    )
+)
+
+Timely Flag Date Mismatches =
+COUNTROWS(
+    FILTER(
+        financial_complaints_cleaned,
+        financial_complaints_cleaned[response_status] = "Closed"
+            && (
+                (financial_complaints_cleaned[timely_response] = "Yes"
+                    && financial_complaints_cleaned[date_company_responded]
+                        > financial_complaints_cleaned[response_due_date])
+                || (financial_complaints_cleaned[timely_response] = "No"
+                    && financial_complaints_cleaned[date_company_responded]
+                        <= financial_complaints_cleaned[response_due_date])
+            )
+    )
+)
+
+FORMATTING
+- Format Timely Response Rate and Late Response Rate as Percentage (2 decimals).
+- Format Average Response Days and Median Response Days as Decimal Number
+  (2 decimals / 0 decimals respectively).
+- Keep count measures as whole numbers.
+
+DATE TABLE FOR MONTHLY TRENDS
+Create a calculated table:
+
+Dates =
+CALENDAR(
+    MIN(financial_complaints_cleaned[date_received]),
+    MAX(financial_complaints_cleaned[date_received])
+)
+
+Add these calculated columns to Dates:
+
+Month Start = DATE(YEAR(Dates[Date]), MONTH(Dates[Date]), 1)
+
+Month Label = FORMAT(Dates[Date], "YYYY-MM")
+
+Sort Month Label by Month Start. Mark Dates as the date table using Dates[Date],
+then create a one-to-many relationship from Dates[Date] to
+financial_complaints_cleaned[date_received]. Use the date table for received-
+month trends; do not connect it to response dates in this one-date model.
+
+DASHBOARD LAYOUT
+- KPI cards: Total Complaints, Open Complaints, Closed Complaints,
+  Timely Response Rate, Average Response Days, and Late Closed Responses.
+- Bar chart: complaint count by issue_category, descending; show top 10.
+- Bar chart: complaint count by financial_product.
+- Line or column chart: monthly complaint count using Dates[Month Label].
+- Matrix: company_name by closed count, timely rate, average response days,
+  and late count.
+- Slicers: financial_product, company_name, state, submission_channel, and
+  response_status.
+- Add a note that the October 2026 source month is partial (data through
+  October 15), and that the timely-rate denominator is closed complaints.
+- Save the interactive report as Financial_Complaints_Analysis.pbix. The
+  supplied Dashboard_Preview.png is a static preview, not a PBIX file.
